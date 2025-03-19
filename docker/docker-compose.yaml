@@ -1,0 +1,11 @@
+services:
+  traefik:
+    image: traefik
+    volumes:
+      - ./traefik:/etc/traefik:ro
+      - ../:/plugins-local/src/bizaway/headers:ro
+    ports:
+      - 80:80
+  
+  whoami:
+    image: traefik/whoami

@@ -1,0 +1,21 @@
+entryPoints:
+  web:
+    address: :80
+
+experimental:
+  plugins:
+    remoteBizawayHeaders:
+      moduleName: github.com/eathtespagheti/traefik-bizaway-headers
+      version: v0.1
+    example:
+      moduleName: github.com/traefik/plugindemo
+      version: v0.2.1
+  localPlugins:
+    bizawayHeaders:
+      moduleName: bizaway/headers
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+log:
+  level: DEBUG

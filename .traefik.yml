@@ -1,0 +1,15 @@
+displayName: Dynamic headers rewriter
+type: middleware
+
+import: github.com/eathtespagheti/traefik-bizaway-headers
+
+summary: 'Change Request and Response headers'
+
+testData:
+  Headers:
+    Request: 
+      Header: test
+      X-URL: '{{URL}}'
+    Response:
+      Foo: 'Bar'
+      X-URL: '[[.Request.Headers.X-URL]]'

@@ -1,0 +1,26 @@
+http:
+  routers:
+    router1:
+      service: whoami
+      middlewares:
+        - headers
+        - bizawayHeaders
+      rule: "Host(`localhost`)"
+
+  middlewares:
+    headers:
+      headers:
+        customRequestHeaders:
+          Host: "custom.endpoint"
+    bizawayHeaders:
+      plugin:
+        bizawayHeaders:
+          Headers:
+            Response:
+              Access-Control-Allow-Origin: "https://[[.Request.Host]]"
+
+  services:
+    whoami:
+      loadBalancer:
+        servers:
+          - url: "http://whoami"
