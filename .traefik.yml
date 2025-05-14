@@ -1,7 +1,7 @@
 displayName: Dynamic headers rewriter
 type: middleware
 
-import: github.com/eathtespagheti/traefik-bizaway-headers
+import: bizaway/headerrules
 
 summary: 'Change Request and Response headers'
 
@@ -9,7 +9,16 @@ testData:
   Headers:
     Request: 
       Header: test
-      X-URL: '{{URL}}'
+      X-Host:
+        source: request
+        value: Host
+      X-Origin:
+        source: request
+        value: Origin
     Response:
-      Foo: 'Bar'
-      X-URL: '[[.Request.Headers.X-URL]]'
+      Foo:
+        source: string
+        value: Bar
+      X-Original-Url:
+        source: request
+        value: X-Host

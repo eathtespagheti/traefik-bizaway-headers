@@ -3,21 +3,19 @@ http:
     router1:
       service: whoami
       middlewares:
-        - headers
         - bizawayHeaders
       rule: "Host(`localhost`)"
 
   middlewares:
-    headers:
-      headers:
-        customRequestHeaders:
-          Host: "custom.endpoint"
     bizawayHeaders:
       plugin:
         bizawayHeaders:
           Headers:
+            Request:
+              X-Original-Host: "[[.Host]]"
+              Host: "custom.endpoint"
             Response:
-              Access-Control-Allow-Origin: "https://[[.Request.Host]]"
+              Access-Control-Allow-Origin: "https://[[.Request.Header.Get \"X-Original-Host\"]]"
 
   services:
     whoami:

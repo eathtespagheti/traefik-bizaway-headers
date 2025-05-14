@@ -1,4 +1,4 @@
-package headers
+package headerrules
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"text/template"
+	// "bizaway/headerrules/internal/HeaderRule"
 )
 
 // Config the plugin configuration.
@@ -70,6 +71,12 @@ func (a *Headers) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 		req.Header.Set(key, writer.String())
 	}
+
+	// If the Host header has been set, copy it over the req Host
+	if host := req.Header.Get("Host"); host != "" {
+		req.Host = host
+	}
+	
 
 	// Wrap the ResponseWriter to capture headers set later.
 	wrappedWriter := &responseWriterWrapper{

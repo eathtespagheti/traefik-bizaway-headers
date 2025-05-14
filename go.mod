@@ -1,3 +1,3 @@
-module github.com/eathtespagheti/traefik-bizaway-headers
+module bizaway/headerrules
 
 go 1.19

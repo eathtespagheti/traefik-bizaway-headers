@@ -3,7 +3,7 @@ services:
     image: traefik
     volumes:
       - ./traefik:/etc/traefik:ro
-      - ../:/plugins-local/src/bizaway/headers:ro
+      - ../:/plugins-local/src/bizaway/headerrules:ro
     ports:
       - 80:80
   

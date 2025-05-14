@@ -1,12 +1,10 @@
-package headers_test
+package headerrules
 
 import (
 	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/eathtespagheti/traefik-bizaway-headers"
 )
 
 const PLUGIN_NAME = "heders-plugin"
@@ -36,7 +34,7 @@ var mock_server_response = http.HandlerFunc(func(rw http.ResponseWriter, req *ht
 
 
 func TestRequestHeaders(t *testing.T) {
-	cfg := headers.CreateConfig()
+	cfg := CreateConfig()
 	cfg.Headers.Request["X-Host"] = "[[.Host]]"
 	cfg.Headers.Request["X-Method"] = "[[.Method]]"
 	cfg.Headers.Request["X-URL"] = "[[.URL]]"
@@ -45,7 +43,7 @@ func TestRequestHeaders(t *testing.T) {
 	ctx := context.Background()
 	next := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) { /* Dummy function */ })
 
-	handler, err := headers.New(ctx, next, cfg, PLUGIN_NAME)
+	handler, err := New(ctx, next, cfg, PLUGIN_NAME)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,11 +64,11 @@ func TestRequestHeaders(t *testing.T) {
 }
 
 func TestResponseHeaders(t *testing.T) {
-	cfg := headers.CreateConfig()
+	cfg := CreateConfig()
 	cfg.Headers.Response[TEST_HEADER] = TEST_HEADER
 	ctx := context.Background()
 
-	handler, err := headers.New(ctx, mock_server_response, cfg, PLUGIN_NAME)
+	handler, err := New(ctx, mock_server_response, cfg, PLUGIN_NAME)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,11 +85,11 @@ func TestResponseHeaders(t *testing.T) {
 }
 
 func TestNoHeadersConfigured(t *testing.T) {
-	cfg := headers.CreateConfig()
+	cfg := CreateConfig()
 	ctx := context.Background()
 	next := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) { /* Dummy function */ })
 
-	_, err := headers.New(ctx, next, cfg, PLUGIN_NAME)
+	_, err := New(ctx, next, cfg, PLUGIN_NAME)
 	if err == nil {
 		t.Fatal("expected error when no headers are configured")
 	}
@@ -107,15 +105,18 @@ func TestRequestResponseChain(t *testing.T) {
 	- Process it with mock_server_response
 	- Ensure that the headers have been correctly replaced on both request and response
 	*/
-	cfg := headers.CreateConfig()
+	cfg := CreateConfig()
 	cfg.Headers.Request[TEST_HEADER] = TEST_HEADER
 	cfg.Headers.Response[TEST_HEADER] = TEST_HEADER
-	cfg.Headers.Response["Access-Control-Allow-Origin"] = "https://[[.Request.Host]]"
+	// Setup host and allow origin update
+	cfg.Headers.Request["X-Original-Host"] = "[[.Host]]"
+	cfg.Headers.Request["Host"] = "custom.endpoint"
+	cfg.Headers.Response["Access-Control-Allow-Origin"] = "https://[[.Request.Header.Get \"X-Original-Host\"]]"
 
 
 	ctx := context.Background()
 
-	handler, err := headers.New(ctx, mock_server_response, cfg, PLUGIN_NAME)
+	handler, err := New(ctx, mock_server_response, cfg, PLUGIN_NAME)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,6 +131,8 @@ func TestRequestResponseChain(t *testing.T) {
 
 	assertReqHeader(t, req, TEST_HEADER, TEST_HEADER)
 	assertResHeader(t, recorder.Result(), TEST_HEADER, TEST_HEADER)
+	assertReqHeader(t, req, "X-Original-Host", "app.domain.name")
+	assertReqHeader(t, req, "Host", "custom.endpoint")
 	assertResHeader(t, recorder.Result(), "Access-Control-Allow-Origin", "https://app.domain.name")
 }
 
