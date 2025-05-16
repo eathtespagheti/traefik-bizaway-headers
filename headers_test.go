@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"bizaway/headerrules/internal/config"
 )
 
 const PLUGIN_NAME = "heders-plugin"
@@ -34,7 +35,7 @@ var mock_server_response = http.HandlerFunc(func(rw http.ResponseWriter, req *ht
 
 
 func TestRequestHeaders(t *testing.T) {
-	cfg := CreateConfig()
+	cfg := config.CreateConfig()
 	cfg.Headers.Request["X-Host"] = "[[.Host]]"
 	cfg.Headers.Request["X-Method"] = "[[.Method]]"
 	cfg.Headers.Request["X-URL"] = "[[.URL]]"
@@ -64,7 +65,7 @@ func TestRequestHeaders(t *testing.T) {
 }
 
 func TestResponseHeaders(t *testing.T) {
-	cfg := CreateConfig()
+	cfg := config.CreateConfig()
 	cfg.Headers.Response[TEST_HEADER] = TEST_HEADER
 	ctx := context.Background()
 
@@ -85,7 +86,7 @@ func TestResponseHeaders(t *testing.T) {
 }
 
 func TestNoHeadersConfigured(t *testing.T) {
-	cfg := CreateConfig()
+	cfg := config.CreateConfig()
 	ctx := context.Background()
 	next := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) { /* Dummy function */ })
 
@@ -105,7 +106,7 @@ func TestRequestResponseChain(t *testing.T) {
 	- Process it with mock_server_response
 	- Ensure that the headers have been correctly replaced on both request and response
 	*/
-	cfg := CreateConfig()
+	cfg := config.CreateConfig()
 	cfg.Headers.Request[TEST_HEADER] = TEST_HEADER
 	cfg.Headers.Response[TEST_HEADER] = TEST_HEADER
 	// Setup host and allow origin update

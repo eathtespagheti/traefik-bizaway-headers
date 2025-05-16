@@ -1,9 +1,10 @@
 package rules
 
 import (
+	"bytes"
 	"errors"
-	"log"
 	"net/http"
+	"text/template"
 )
 
 // HeaderRule
@@ -11,10 +12,15 @@ import (
 // Function that determines wether or not the header modification should happen, by default always true
 func (h *HeaderRule) headerChangeConditions() bool {
 	// Check if the change condition function is present
-    if h.ChangeCondition != nil {
-        return h.ChangeCondition(h)
-    }
-    return true
+	if h.ChangeCondition != nil {
+		return h.ChangeCondition(h)
+	}
+	return true
+}
+
+// Default GetHeaderValue that panics since an override method is not defined
+func (h *HeaderRule) GetHeaderValue() string {
+	panic("GetHeaderValue not implemented")
 }
 
 // Set the Header value
@@ -22,37 +28,57 @@ func (h *HeaderRule) SetHeader() {
 	if !h.headerChangeConditions() {
 		return
 	}
-	
-	h.destinationHeader.Set(h.Value, h.GetHeaderValue())
+	h.destinationHeaders.Set(h.Header, h.GetHeaderValue())
 }
 
 // Initialize the sourceHeader array
 func (h *HeaderRule) initSourceHeader() {
 	if h.Source == "request" {
-		h.sourceHeader = &h.Request.Header
+		h.sourceHeaders = &h.Request.Header
 	} else if h.Source == "response" {
-		h.sourceHeader = &h.Response.Header
+		h.sourceHeaders = &h.Response.Header
 	}
 }
 
 // Initialize the destinationHeader array
 func (h *HeaderRule) initDestinationHeader() {
 	if h.Destination == "request" {
-		h.destinationHeader = &h.Request.Header
+		h.destinationHeaders = &h.Request.Header
 	} else if h.Destination == "response" {
-		h.destinationHeader = &h.Response.Header
+		h.destinationHeaders = &h.Response.Header
 	}
+}
+
+// Initialize the template
+func (h *HeaderRule) initTemplate() {
+	h.template = template.New("header-value").Delims("[[", "]]")
+}
+
+// parseValueTemplate
+func (h *HeaderRule) parseValueTemplate() (string, error) {
+	tmpl, err := h.template.Parse(h.Value)
+	if err != nil {
+		return "", err
+	}
+
+	writer := &bytes.Buffer{}
+	err = tmpl.Execute(writer, h)
+	if err != nil {
+		return "", err
+	}
+
+	return writer.String(), nil
 }
 
 // Validate that all the Header Rule parameters are correctly configured
 func (h *HeaderRule) Validate() (bool, error) {
 	// Check source header
-	if h.sourceHeader == nil {
+	if h.sourceHeaders == nil {
 		return false, errors.New("invalid source header")
 	}
 
 	// Check destination header
-	if h.destinationHeader == nil {
+	if h.destinationHeaders == nil {
 		return false, errors.New("invalid destination header")
 	}
 
@@ -62,51 +88,72 @@ func (h *HeaderRule) Validate() (bool, error) {
 // String Rule
 
 // Get the the Header name
-func (s *StringHeaderRule) GetHeader() string {
+func (s *StringHeaderRule) GetHeaderValue() string {
+	if s.EnableTemplates {
+		value, err := s.parseValueTemplate()
+		if err != nil {
+			return s.Value
+		}
+		return value
+	}
 	return s.Value
 }
 
-// Validate that all the Header Rule parameters are correctly configured
-func (h *StringHeaderRule) Validate() (bool, error) {
-	if h.destinationHeader == nil {
-		return false, errors.New("invalid destination header")
+// Set the Header value
+func (h *StringHeaderRule) SetHeader() {
+	if !h.headerChangeConditions() {
+		return
 	}
-
-	return true, nil
+	h.destinationHeaders.Set(h.Header, h.GetHeaderValue())
 }
 
-func NewStringHeaderRule(header string, value string, destination string, request *http.Request, response *http.Response, headerChangeCondition func(*HeaderRule) bool) *StringHeaderRule {
+// Create a new StringHeaderRule
+func NewStringHeaderRule(header string, value string, destination string, request *http.Request, response *http.Response, headerChangeCondition func(*HeaderRule) bool, enableTemplates bool) (*StringHeaderRule, error) {
 	var shr *StringHeaderRule = &StringHeaderRule{
 		HeaderRule: HeaderRule{
-			Header:      header,
-			Value:       value,
-			Destination: destination,
-			Request:     request,
-			Response:    response,
+			Header:          header,
+			Value:           value,
+			Destination:     destination,
+			Request:         request,
+			Response:        response,
 			ChangeCondition: headerChangeCondition,
+			EnableTemplates: enableTemplates,
 		},
 	}
 
 	// Init the destinationHeader array
 	shr.initDestinationHeader()
 
-	// Validate the rule
-	valid, err := shr.Validate()
-	if !valid {
-		log.Fatal(err)
+	// Set the source header the same as the destination header in order to pass validation
+	shr.sourceHeaders = shr.destinationHeaders
+
+	// Init the template if enabled
+	if enableTemplates {
+		shr.initTemplate()
 	}
 
-	return shr
+	// Validate the rule
+	_, err := shr.Validate()
+	return shr, err
 }
 
 // Copy Rule
 
 // Get the the Header name
-func (h *CopyHeaderRule) GetHeader() string {
-	return h.sourceHeader.Get(h.Header)
+func (h *CopyHeaderRule) GetHeaderValue() string {
+	return h.sourceHeaders.Get(h.Header)
 }
 
-func NewCopyHeaderRule(header string, value string, source string, destination string, request *http.Request, response *http.Response) *CopyHeaderRule {
+// Set the Header value
+func (h *CopyHeaderRule) SetHeader() {
+	if !h.headerChangeConditions() {
+		return
+	}
+	h.destinationHeaders.Set(h.Header, h.GetHeaderValue())
+}
+
+// Create a new CopyHeaderRule
+func NewCopyHeaderRule(header string, value string, source string, destination string, request *http.Request, response *http.Response) (*CopyHeaderRule, error) {
 	var chr *CopyHeaderRule = &CopyHeaderRule{
 		HeaderRule: HeaderRule{
 			Header:      header,
@@ -123,10 +170,6 @@ func NewCopyHeaderRule(header string, value string, source string, destination s
 	chr.initDestinationHeader()
 
 	// Validate the rule
-	valid, err := chr.Validate()
-	if !valid {
-		log.Fatal(err)
-	}
-
-	return chr
+	_, err := chr.Validate()
+	return chr, err
 }

@@ -1,61 +1,50 @@
 package headerrules
 
 import (
+	"bizaway/headerrules/internal/config"
+	"bizaway/headerrules/internal/rules"
 	"bytes"
 	"context"
 	"fmt"
 	"net/http"
 	"text/template"
-	// "bizaway/headerrules/internal/HeaderRule"
 )
 
-// Config the plugin configuration.
-type Config struct {
-	Headers HeaderConfig `json:"headers,omitempty"`
+type HeadersPlugin struct {
+	next                         http.Handler
+	requestHeadersConfiguration  map[string]string
+	responseHeadersConfiguration map[string]string
+	name                         string
+	template                     *template.Template
+	// Array of headers rules to apply
+	requestHeadersRules    []rules.HeaderRule
+	responseHeadersRules   []rules.HeaderRule
 }
 
-// HeaderConfig defines the structure for request and response headers.
-type HeaderConfig struct {
-	Request  map[string]string `json:"request,omitempty"`
-	Response map[string]string `json:"response,omitempty"`
-}
-
-// CreateConfig creates the default plugin configuration.
-func CreateConfig() *Config {
-	return &Config{
-		Headers: HeaderConfig{
-			Request:  make(map[string]string),
-			Response: make(map[string]string),
-		},
-	}
-}
-
-type Headers struct {
-	next            http.Handler
-	requestHeaders  map[string]string
-	responseHeaders map[string]string
-	name            string
-	template        *template.Template
-}
+// Take in a configuraiton map for a set of header rules and creates an array of said headerrules
+// func createHeaderRule(configuration map[string]string, request *http.Request, response *http.Response, destination string) rules.HeaderRuleInterface {
+	
+// }
 
 // New created a new Headers plugin.
-func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
+func New(ctx context.Context, next http.Handler, config *config.Config, name string) (http.Handler, error) {
 	if len(config.Headers.Request) == 0 && len(config.Headers.Response) == 0 {
 		return nil, fmt.Errorf("at least one request or response header must be configured")
-	}
+	}	
 
-	return &Headers{
-		requestHeaders:  config.Headers.Request,
-		responseHeaders: config.Headers.Response,
-		next:            next,
-		name:            name,
-		template:        template.New("demo").Delims("[[", "]]"),
+	// Initialize the headers plugin
+	return &HeadersPlugin{
+		requestHeadersConfiguration:  config.Headers.Request,
+		responseHeadersConfiguration: config.Headers.Response,
+		next:                         next,
+		name:                         name,
+		template:                     template.New("header-value").Delims("[[", "]]"),
 	}, nil
 }
 
-func (a *Headers) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (a *HeadersPlugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// Modify Request Headers
-	for key, value := range a.requestHeaders {
+	for key, value := range a.requestHeadersConfiguration {
 		tmpl, err := a.template.Parse(value)
 		if err != nil {
 			http.Error(rw, fmt.Sprintf("error parsing request header template '%s': %v", key, err), http.StatusInternalServerError)
@@ -76,12 +65,11 @@ func (a *Headers) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if host := req.Header.Get("Host"); host != "" {
 		req.Host = host
 	}
-	
 
 	// Wrap the ResponseWriter to capture headers set later.
 	wrappedWriter := &responseWriterWrapper{
 		ResponseWriter:  rw,
-		responseHeaders: a.responseHeaders,
+		responseHeaders: a.responseHeadersConfiguration,
 		template:        a.template,
 		originalHeaders: rw.Header(),
 		request:         req,
@@ -98,7 +86,7 @@ type responseWriterWrapper struct {
 	responseHeaders map[string]string
 	template        *template.Template
 	originalHeaders http.Header
-	request 		*http.Request
+	request         *http.Request
 }
 
 func (w *responseWriterWrapper) WriteHeader(statusCode int) {
@@ -106,7 +94,7 @@ func (w *responseWriterWrapper) WriteHeader(statusCode int) {
 	var templateData = struct {
 		Headers *http.Header
 		Request *http.Request
-	} {
+	}{
 		Headers: &w.originalHeaders,
 		Request: w.request,
 	}

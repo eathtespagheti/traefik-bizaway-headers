@@ -1,49 +1,19 @@
 package rules
 
 import (
-	"errors"
 	"net/http"
+	"net/url"
 	"testing"
 )
 
-func testHeaderRuleHeaderChangeConditions(t *testing.T) {
+func TestHeaderRuleHeaderChangeConditions(t *testing.T) {
 	rule := HeaderRule{}
 	if !rule.headerChangeConditions() {
 		t.Error("HeaderChangeConditions should return true by default")
 	}
 }
 
-func testHeaderRuleSetHeader(t *testing.T) {
-	req := &http.Request{Header: http.Header{}}
-	res := &http.Response{Header: http.Header{}}
-	rule := HeaderRule{
-		Request:           req,
-		Response:          res,
-		Value:             "testValue",
-		Destination:       "request",
-		destinationHeader: &req.Header,
-	}
-
-	rule.SetHeader()
-	if req.Header.Get(rule.Value) != "" {
-		t.Errorf("Expected header to be empty, got: %s", req.Header.Get(rule.Value))
-	}
-
-	rule.Header = "Test-Header"
-	rule.SetHeader()
-	if req.Header.Get(rule.Header) != "testValue" {
-		t.Errorf("Expected header value to be 'testValue', got: %s", req.Header.Get(rule.Header))
-	}
-
-	// Test with HeaderChangeConditions returning false
-	rule.ChangeCondition = func(*HeaderRule) bool { return false }
-	rule.SetHeader()
-	if req.Header.Get(rule.Header) != "testValue" {
-		t.Errorf("Expected header value to be 'testValue' (no change), got: %s", req.Header.Get(rule.Header))
-	}
-}
-
-func testHeaderRuleInitSourceHeader(t *testing.T) {
+func TestHeaderRuleInitSourceHeader(t *testing.T) {
 	req := &http.Request{Header: http.Header{}}
 	res := &http.Response{Header: http.Header{}}
 
@@ -53,24 +23,24 @@ func testHeaderRuleInitSourceHeader(t *testing.T) {
 		Source:   "request",
 	}
 	rule.initSourceHeader()
-	if rule.sourceHeader == nil || rule.sourceHeader != &req.Header {
+	if rule.sourceHeaders == nil || rule.sourceHeaders != &req.Header {
 		t.Error("Expected sourceHeader to be initialized to request header")
 	}
 
 	rule.Source = "response"
 	rule.initSourceHeader()
-	if rule.sourceHeader == nil || rule.sourceHeader != &res.Header {
+	if rule.sourceHeaders == nil || rule.sourceHeaders != &res.Header {
 		t.Error("Expected sourceHeader to be initialized to response header")
 	}
 
 	rule.Source = "invalid"
 	rule.initSourceHeader()
-	if rule.sourceHeader == nil {
+	if rule.sourceHeaders == nil {
 		t.Error("Expected sourceHeader to be nil")
 	}
 }
 
-func testHeaderRuleInitDestinationHeader(t *testing.T) {
+func TestHeaderRuleInitDestinationHeader(t *testing.T) {
 	req := &http.Request{Header: http.Header{}}
 	res := &http.Response{Header: http.Header{}}
 
@@ -80,38 +50,38 @@ func testHeaderRuleInitDestinationHeader(t *testing.T) {
 		Destination: "request",
 	}
 	rule.initDestinationHeader()
-	if rule.destinationHeader == nil || rule.destinationHeader != &req.Header {
+	if rule.destinationHeaders == nil || rule.destinationHeaders != &req.Header {
 		t.Error("Expected destinationHeader to be initialized to request header")
 	}
 
 	rule.Destination = "response"
 	rule.initDestinationHeader()
-	if rule.destinationHeader == nil || rule.destinationHeader != &res.Header {
+	if rule.destinationHeaders == nil || rule.destinationHeaders != &res.Header {
 		t.Error("Expected destinationHeader to be initialized to response header")
 	}
 	rule.Destination = "invalid"
 	rule.initDestinationHeader()
-	if rule.destinationHeader == nil {
+	if rule.destinationHeaders == nil {
 		t.Error("Expected destinationHeader to be nil")
 	}
 }
 
-func testHeaderRuleValidate(t *testing.T) {
+func TestHeaderRuleValidate(t *testing.T) {
 	req := &http.Request{Header: http.Header{}}
 	res := &http.Response{Header: http.Header{}}
 
 	rule := HeaderRule{
-		Request:           req,
-		Response:          res,
-		destinationHeader: &req.Header,
-		sourceHeader:      &res.Header,
+		Request:            req,
+		Response:           res,
+		destinationHeaders: &req.Header,
+		sourceHeaders:      &res.Header,
 	}
 	valid, err := rule.Validate()
 	if !valid || err != nil {
 		t.Errorf("Expected Validate to return true and nil error, got: %v, %v", valid, err)
 	}
 
-	rule.sourceHeader = nil
+	rule.sourceHeaders = nil
 	valid, err = rule.Validate()
 	if valid || err == nil {
 		t.Errorf("Expected Validate to return false and an error, got: %v, %v", valid, err)
@@ -120,8 +90,8 @@ func testHeaderRuleValidate(t *testing.T) {
 		t.Errorf("Expected error message 'invalid source header', got: %v", err)
 	}
 
-	rule.sourceHeader = &res.Header
-	rule.destinationHeader = nil
+	rule.sourceHeaders = &res.Header
+	rule.destinationHeaders = nil
 	valid, err = rule.Validate()
 	if valid || err == nil {
 		t.Errorf("Expected Validate to return false and an error, got: %v, %v", valid, err)
@@ -131,30 +101,40 @@ func testHeaderRuleValidate(t *testing.T) {
 	}
 }
 
-func testStringHeaderRuleGetHeader(t *testing.T) {
+func TestStringHeaderRuleGetHeaderValue(t *testing.T) {
 	rule := StringHeaderRule{
 		HeaderRule: HeaderRule{
 			Value: "testHeader",
 		},
 	}
-	if rule.GetHeader() != "testHeader" {
-		t.Errorf("Expected GetHeader to return 'testHeader', got: %s", rule.GetHeader())
+	if rule.GetHeaderValue() != "testHeader" {
+		t.Errorf("Expected GetHeaderValue to return 'testHeader', got: %s", rule.GetHeaderValue())
 	}
 }
 
-func testStringHeaderRuleValidate(t *testing.T) {
+func TestStringHeaderRuleValidate(t *testing.T) {
 	req := &http.Request{Header: http.Header{}}
 	rule := StringHeaderRule{
 		HeaderRule: HeaderRule{
-			destinationHeader: &req.Header,
+			destinationHeaders: &req.Header,
 		},
 	}
+
 	valid, err := rule.Validate()
+	if valid || err == nil {
+		t.Errorf("Expected Validate to return false and an error, got: %v, %v", valid, err)
+	}
+	if err != nil && err.Error() != "invalid source header" {
+		t.Errorf("Expected error message 'invalid source header', got: %v", err)
+	}
+
+	rule.sourceHeaders = rule.destinationHeaders
+	valid, err = rule.Validate()
 	if !valid || err != nil {
 		t.Errorf("Expected Validate to return true and nil error, got: %v, %v", valid, err)
 	}
 
-	rule.destinationHeader = nil
+	rule.destinationHeaders = nil
 	valid, err = rule.Validate()
 	if valid || err == nil {
 		t.Errorf("Expected Validate to return false and an error, got: %v, %v", valid, err)
@@ -164,10 +144,10 @@ func testStringHeaderRuleValidate(t *testing.T) {
 	}
 }
 
-func testNewStringHeaderRule(t *testing.T) {
+func TestNewStringHeaderRule(t *testing.T) {
 	req := &http.Request{Header: http.Header{}}
 	res := &http.Response{Header: http.Header{}}
-	rule := NewStringHeaderRule("Test-Header", "testValue", "request", req, res, nil)
+	rule, _ := NewStringHeaderRule("Test-Header", "testValue", "request", req, res, nil, false)
 
 	if rule.Header != "Test-Header" {
 		t.Errorf("Expected Header to be 'Test-Header', got: %s", rule.Header)
@@ -184,39 +164,63 @@ func testNewStringHeaderRule(t *testing.T) {
 	if rule.Response != res {
 		t.Error("Expected Response to be the same")
 	}
-	if rule.destinationHeader != &req.Header {
+	if rule.destinationHeaders != &req.Header {
 		t.Error("Expected destinationHeader to be initialized to request header")
 	}
 }
 
-func testNewStringHeaderRuleInvalid(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic")
-		}
-	}()
+func TestNewStringHeaderRuleInvalid(t *testing.T) {
 	req := &http.Request{Header: http.Header{}}
 	res := &http.Response{Header: http.Header{}}
-	NewStringHeaderRule("Test-Header", "testValue", "invalid", req, res, nil)
+	_, err := NewStringHeaderRule("Test-Header", "testValue", "invalid", req, res, nil, false)
+	// Expect to get a error
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
 }
 
-func testCopyHeaderRuleGetHeader(t *testing.T) {
+func TestStringHeaderRuleSetValue(t *testing.T) {
+	req := &http.Request{Header: http.Header{}}
+	res := &http.Response{Header: http.Header{}}
+	rule, _ := NewStringHeaderRule("Test-Header", "testValue", "request", req, res, nil, false)
+
+	rule.SetHeader()
+	// Check that the value on the header has been correctly set
+	if req.Header.Get(rule.Header) != rule.Value {
+		t.Errorf("Expected header value to be '%s', got: %s", rule.Value, req.Header.Get(rule.Header))
+	}
+}
+
+func TestStringHeaderRuleTemplate(t *testing.T) {
+	req := &http.Request{Header: http.Header{}, URL: &url.URL{Host: "test.com"}}
+	res := &http.Response{Header: http.Header{}}
+	rule, _ := NewStringHeaderRule("Test-Header", "[[.Request.URL.Host]]", "request", req, res, nil, true)
+
+	rule.SetHeader()
+	// Check that the value on the header has been correctly set
+	if req.Header.Get(rule.Header) != req.URL.Host {
+		t.Errorf("Expected header value to be '%s', got: %s", req.URL.Host, req.Header.Get(rule.Header))
+	}
+}
+
+
+func TestCopyHeaderRuleGetHeader(t *testing.T) {
 	req := &http.Request{Header: http.Header{"Test-Header": []string{"testValue"}}}
 	rule := CopyHeaderRule{
 		HeaderRule: HeaderRule{
-			Header:       "Test-Header",
-			sourceHeader: &req.Header,
+			Header:        "Test-Header",
+			sourceHeaders: &req.Header,
 		},
 	}
-	if rule.GetHeader() != "testValue" {
-		t.Errorf("Expected GetHeader to return 'testValue', got: %s", rule.GetHeader())
+	if rule.GetHeaderValue() != "testValue" {
+		t.Errorf("Expected GetHeaderValue to return 'testValue', got: %s", rule.GetHeaderValue())
 	}
 }
 
-func testNewCopyHeaderRule(t *testing.T) {
+func TestNewCopyHeaderRule(t *testing.T) {
 	req := &http.Request{Header: http.Header{}}
 	res := &http.Response{Header: http.Header{}}
-	rule := NewCopyHeaderRule("Test-Header", "testValue", "request", "response", req, res)
+	rule, _ := NewCopyHeaderRule("Test-Header", "testValue", "request", "response", req, res)
 
 	if rule.Header != "Test-Header" {
 		t.Errorf("Expected Header to be 'Test-Header', got: %s", rule.Header)
@@ -236,63 +240,70 @@ func testNewCopyHeaderRule(t *testing.T) {
 	if rule.Response != res {
 		t.Error("Expected Response to be the same")
 	}
-	if rule.sourceHeader != &req.Header {
+	if rule.sourceHeaders != &req.Header {
 		t.Error("Expected sourceHeader to be initialized to request header")
 	}
-	if rule.destinationHeader != &res.Header {
+	if rule.destinationHeaders != &res.Header {
 		t.Error("Expected destinationHeader to be initialized to response header")
 	}
 }
 
-func testNewCopyHeaderRule_Invalid(t *testing.T) {
+func TestNewCopyHeaderRuleInvalid(t *testing.T) {
+	req := &http.Request{Header: http.Header{}}
+	res := &http.Response{Header: http.Header{}}
+	_, err := NewCopyHeaderRule("Test-Header", "testValue", "invalid", "response", req, res)
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+}
+
+func TestHeaderRuleGetHeaderValue(t *testing.T) {
+	rule := HeaderRule{}
+	// Expect it to panic (GetHeaderValue not implemented)
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("The code did not panic")
 		}
 	}()
-	req := &http.Request{Header: http.Header{}}
-	res := &http.Response{Header: http.Header{}}
-	NewCopyHeaderRule("Test-Header", "testValue", "invalid", "response", req, res)
+	rule.GetHeaderValue()
 }
 
-func testHeaderRuleGetHeaderValue(t *testing.T) {
+func TestHeaderRuleValidateNilSource(t *testing.T) {
 	rule := HeaderRule{
-		Value: "testValue",
-	}
-	if rule.GetHeaderValue() != "testValue" {
-		t.Errorf("Expected GetHeaderValue to return 'testValue', got: %s", rule.GetHeaderValue())
-	}
-}
-
-func testHeaderRuleGetHeaderValueEmpty(t *testing.T) {
-	rule := HeaderRule{}
-	if rule.GetHeaderValue() != "" {
-		t.Errorf("Expected GetHeaderValue to return '', got: %s", rule.GetHeaderValue())
-	}
-}
-
-func testHeaderRuleValidateNilSource(t *testing.T) {
-	rule := HeaderRule{
-		destinationHeader: &http.Header{},
+		destinationHeaders: &http.Header{},
 	}
 	_, err := rule.Validate()
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
-	if !errors.Is(err, errors.New("invalid source header")) {
+	if err.Error() != "invalid source header" {
 		t.Errorf("Expected error 'invalid source header', got: %v", err)
 	}
 }
 
-func testHeaderRuleValidateNilDestination(t *testing.T) {
+func TestHeaderRuleValidateNilDestination(t *testing.T) {
 	rule := HeaderRule{
-		sourceHeader: &http.Header{},
+		sourceHeaders: &http.Header{},
 	}
 	_, err := rule.Validate()
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
-	if !errors.Is(err, errors.New("invalid destination header")) {
+	if err.Error() != "invalid destination header" {
 		t.Errorf("Expected error 'invalid destination header', got: %v", err)
 	}
 }
+
+func TestCopyHeaderRuleSetValue(t *testing.T) {
+	req := &http.Request{Header: http.Header{}}
+	res := &http.Response{Header: http.Header{}}
+	req.Header.Set("Test-Header", "testValue")
+	rule, _ := NewCopyHeaderRule("Test-Header", "testValue", "request", "response", req, res)
+
+	rule.SetHeader()
+	// Check that the value on the header has been correctly set
+	if res.Header.Get(rule.Header) != req.Header.Get(rule.Header) {
+		t.Errorf("Expected header value to be '%s', got: %s", req.Header.Get(rule.Header), res.Header.Get(rule.Header))
+	}
+}
+
